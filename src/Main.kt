@@ -6,7 +6,7 @@ import javax.swing.border.EtchedBorder
 fun main(args: Array<String>) {
     val strategies = listOf(
             NaiveStrategy to 1,
-            CynicStrategy to 3,
+            CynicStrategy to 5,
             RandomStrategy(0.5) to 1,
             RandomStrategy(0.25) to 1,
             RandomStrategy(0.75) to 1,
@@ -28,22 +28,6 @@ fun main(args: Array<String>) {
     }
 
     view.start()
-
-/*
-    println("Initial population: ${environment.population}")
-
-    while (environment.games < 10000) {
-        environment.runOneRound()
-        println("Round #${environment.rounds}, games played: ${environment.games}, population: ${environment.population}")
-        if (environment.population == 0) return
-    }
-
-    println()
-    print(environment.statistics())
-
-    val image = environment.asImage(500, 500)
-    ImageIO.write(image, "PNG", File("result.png"));
-*/
 }
 
 class LiveView(private val environment: Environment) : JPanel(BorderLayout()) {

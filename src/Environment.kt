@@ -9,19 +9,19 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 const val COOPERATION_PAYOFF = +1.0
-const val SUCKER_FINE = -1.0
+const val SUCKER_FINE = -1.5
 const val TEMPTATION_PAYOFF = +1.5
 const val DEFAULT_PAYOFF = 0.0
 
 const val LIFE_COST = 0.2 // per cycle
-const val INITIAL_ENERGY = 10.0
-const val BREEDING_COST = 15.0
-const val MIN_ENERGY_TO_BREED = 30.0
+const val INITIAL_ENERGY = 5.0
+const val BREEDING_COST = 20.0
+const val MIN_ENERGY_TO_BREED = 40.0
 const val MIN_ENERGY_TO_LIVE = 0.0
 
 const val INITIAL_AREA_SIZE = 5.0
 const val MAX_DISTANCE_TO_MEET = 5.0
-const val MAX_MOVE_DISTANCE = 2.0
+const val MAX_MOVE_DISTANCE = 1.0
 
 enum class Decision {
     COOPERATE, DEFECT
@@ -71,6 +71,7 @@ class Individual(val id: Long, val strategy: Strategy, var energy: Double, var l
 
 class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     private val individuals: MutableCollection<Individual>
+    private val grid = Grid<Individual>(MAX_DISTANCE_TO_MEET * 2, { location })
     private var nextId = 0L
     private val random = Random()
 
@@ -95,7 +96,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
 
             while (true) {
                 val location = Location(random.nextDouble() * INITIAL_AREA_SIZE, random.nextDouble() * INITIAL_AREA_SIZE)
-                individuals.add(Individual(newId(), strategyToUse, INITIAL_ENERGY, location))
+                addIndividual(Individual(newId(), strategyToUse, INITIAL_ENERGY, location))
 
                 if (clones-- == 0) break
                 strategyToUse = strategy.clone()
@@ -104,6 +105,23 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     }
 
     private fun newId() = nextId++
+
+    private fun addIndividual(individual: Individual) {
+        individuals.add(individual)
+        grid.addItem(individual)
+    }
+
+    private fun removeIndividual(individual: Individual) {
+        val removed = individuals.remove(individual)
+        assert(removed)
+        grid.removeItem(individual)
+    }
+
+    private fun moveIndividual(individual: Individual, location: Location) {
+        val oldLocation = individual.location
+        individual.location = location
+        grid.itemMoved(individual, oldLocation)
+    }
 
     val population: Int
         get() = individuals.size
@@ -180,11 +198,9 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         for (individual in individuals.toList()) {
             if (individual !in individuals) continue // has died already
 
-            //TODO: speed up here
             // step 1: find partner and play the game
-            val potentialPartners = individuals.filter {
-                it != individual && it.location.distanceTo(individual.location) <= MAX_DISTANCE_TO_MEET
-            }
+            val potentialPartners = grid.itemsWithinDistance(individual.location, MAX_DISTANCE_TO_MEET)
+                    .filter { it != individual }
             if (potentialPartners.isNotEmpty()) {
                 val partner = potentialPartners[random.nextInt(potentialPartners.size)]
                 playGame(individual, partner)
@@ -228,8 +244,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
 
     private fun dieIfWeak(individual: Individual) {
         if (individual.energy < MIN_ENERGY_TO_LIVE) {
-            val removed = individuals.remove(individual)
-            assert(removed)
+            removeIndividual(individual)
             deaths++
         }
     }
@@ -239,13 +254,13 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         val moveDirection = random.nextDouble() * Math.PI * 2
         val moveX = moveDistance * Math.cos(moveDirection)
         val moveY = moveDistance * Math.sin(moveDirection)
-        individual.location = Location(individual.location.x + moveX, individual.location.y + moveY)
+        moveIndividual(individual, Location(individual.location.x + moveX, individual.location.y + moveY))
     }
 
     private fun breed(individual: Individual) {
         val strategyClone = individual.strategy.clone()
         assert(strategyClone.javaClass == individual.strategy.javaClass)
-        individuals.add(Individual(newId(), strategyClone, INITIAL_ENERGY, individual.location))
+        addIndividual(Individual(newId(), strategyClone, INITIAL_ENERGY, individual.location))
         individual.energy -= BREEDING_COST
         births++
     }
