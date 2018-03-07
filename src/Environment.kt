@@ -1,19 +1,31 @@
 
+import java.awt.BasicStroke
 import java.awt.Color
+import java.awt.Image
 import java.awt.image.BufferedImage
-import java.awt.image.RenderedImage
+import java.text.DecimalFormat
 import java.util.*
 import kotlin.math.max
 import kotlin.math.roundToInt
-
-enum class Decision {
-    COOPERATE, DEFECT
-}
 
 const val COOPERATION_PAYOFF = +1.0
 const val SUCKER_FINE = -1.0
 const val TEMPTATION_PAYOFF = +1.5
 const val DEFAULT_PAYOFF = 0.0
+
+const val LIFE_COST = 0.2 // per cycle
+const val INITIAL_ENERGY = 10.0
+const val BREEDING_COST = 15.0
+const val MIN_ENERGY_TO_BREED = 30.0
+const val MIN_ENERGY_TO_LIVE = 0.0
+
+const val INITIAL_AREA_SIZE = 5.0
+const val MAX_DISTANCE_TO_MEET = 5.0
+const val MAX_MOVE_DISTANCE = 2.0
+
+enum class Decision {
+    COOPERATE, DEFECT
+}
 
 fun payoff(my: Decision, other: Decision): Double {
     return when (my) {
@@ -55,20 +67,9 @@ data class Location(val x: Double, val y: Double) {
     }
 }
 
-class Individual(val id: Long, val strategy: Strategy, var strength: Double, var location: Location)
+class Individual(val id: Long, val strategy: Strategy, var energy: Double, var location: Location)
 
 class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
-    companion object {
-        val INITIAL_STRENGTH = 10.0
-        val BREEDING_COST = 5.0
-        val MIN_STRENGTH_TO_BREED = 30.0
-        val MIN_STRENGTH_TO_LIVE = 0.0
-
-        val INITIAL_AREA_SIZE = 5.0
-        val MAX_DISTANCE_TO_MEET = 5.0
-        val MAX_MOVE_DISTANCE = 1.0
-    }
-
     private val individuals: MutableCollection<Individual>
     private var nextId = 0L
     private val random = Random()
@@ -82,6 +83,8 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         private set
     var births = 0
         private set
+    var oneRoundTime = 0
+        private set
 
     init {
         individuals = mutableSetOf()
@@ -92,7 +95,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
 
             while (true) {
                 val location = Location(random.nextDouble() * INITIAL_AREA_SIZE, random.nextDouble() * INITIAL_AREA_SIZE)
-                individuals.add(Individual(newId(), strategyToUse, INITIAL_STRENGTH, location))
+                individuals.add(Individual(newId(), strategyToUse, INITIAL_ENERGY, location))
 
                 if (clones-- == 0) break
                 strategyToUse = strategy.clone()
@@ -110,59 +113,74 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         val presentationsSorted = grouped.keys.sortedByDescending { grouped[it]!!.size }
         return buildString {
             append("Rounds: $rounds\n")
+            append("Last round time: $oneRoundTime ms\n")
             append("Games played: $games\n")
             append("Died: $deaths\n")
             append("Born: $births\n")
             append("Total population: $population\n")
+            val format = DecimalFormat("#.00")
             for (presentation in presentationsSorted) {
-                val all = grouped[presentation]!!
-                val averageStrength = all.sumByDouble { it.strength } / all.size
-                append("    \"$presentation\": ${all.size} (average strength: $averageStrength)\n")
+                val group = grouped[presentation]!!
+                val percent = format.format(group.size / population.toDouble() * 100)
+                val averageEnergy = format.format(group.sumByDouble { it.energy } / group.size)
+                append("    \"$presentation\": $percent% (average energy: $averageEnergy)\n")
             }
         }
     }
 
     private val PADDING = 10
 
-    fun asImage(width: Int, height: Int): RenderedImage {
+    fun asImage(width: Int, height: Int): Image {
         assert(width > PADDING * 2)
         assert(height > PADDING * 2)
 
-        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
         val g = image.createGraphics()
 
         g.paint = Color.WHITE
         g.fillRect(0, 0, width, height)
 
-        if (population > 0) {
-            val xs = individuals.map { it.location.x }
-            val ys = individuals.map { it.location.y }
-            val minX = xs.min()!!
-            val maxX = xs.max()!!
-            val minY = xs.min()!!
-            val maxY = xs.max()!!
+        val initialMinX = 0.0
+        val initialMaxX = INITIAL_AREA_SIZE
+        val initialMinY = 0.0
+        val initialMaxY = INITIAL_AREA_SIZE
 
-            val scale1 = (maxX - minX) / (width - PADDING * 2)
-            val scale2 = (maxY - minY) / (height - PADDING * 2)
-            val scale = max(scale1, scale2)
-            if (scale > 0) { // TODO:otherwise?
-                for (individual in individuals) {
-                    val x = ((individual.location.x - minX) / scale + PADDING).roundToInt()
-                    val y = ((individual.location.y - minY) / scale + PADDING).roundToInt()
-                    g.paint = individual.strategy.presentationColor
-                    g.fillOval(x - 3, y - 3, 6, 6)
-                }
-            }
+        val xs = individuals.map { it.location.x } + listOf(initialMinX, initialMaxX)
+        val ys = individuals.map { it.location.y } + listOf(initialMinY, initialMaxY)
+        val minX = xs.min()!!
+        val maxX = xs.max()!!
+        val minY = ys.min()!!
+        val maxY = ys.max()!!
+
+        val scale1 = (maxX - minX) / (width - PADDING * 2)
+        val scale2 = (maxY - minY) / (height - PADDING * 2)
+        val scale = max(scale1, scale2)
+
+        fun Double.toImageX(): Int = ((this - minX) / scale + PADDING).roundToInt()
+        fun Double.toImageY(): Int = ((this - minY) / scale + PADDING).roundToInt()
+        fun Double.toImageDimension(): Int = (this / scale).roundToInt()
+
+        g.paint = Color.DARK_GRAY
+        g.stroke = BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0f, floatArrayOf(0.9f), 0f)
+        g.drawRect(initialMinX.toImageX(), initialMinY.toImageY(),
+                (initialMaxX - initialMinX).toImageDimension(), (initialMaxY - initialMinY).toImageDimension())
+
+        for (individual in individuals) {
+            g.paint = individual.strategy.presentationColor
+            g.fillOval(individual.location.x.toImageX() - 3, individual.location.y.toImageY() - 3, 6, 6)
         }
 
         g.dispose()
         return image
     }
 
-    fun playOneRound() {
+    fun runOneRound() {
+        val startTime = System.currentTimeMillis()
+
         for (individual in individuals.toList()) {
             if (individual !in individuals) continue // has died already
 
+            //TODO: speed up here
             // step 1: find partner and play the game
             val potentialPartners = individuals.filter {
                 it != individual && it.location.distanceTo(individual.location) <= MAX_DISTANCE_TO_MEET
@@ -174,14 +192,21 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
             }
 
             // step 2: breed
-            if (individual.strength >= MIN_STRENGTH_TO_BREED) {
+            if (individual.energy >= MIN_ENERGY_TO_BREED) {
                 breed(individual)
             }
 
             // step 3: move
             move(individual)
+
+            // step 4: spend energy and die if not enough
+            individual.energy -= LIFE_COST
+            dieIfWeak(individual)
+
         }
+
         rounds++
+        oneRoundTime = (System.currentTimeMillis() - startTime).toInt()
     }
 
     private fun playGame(individual1: Individual, individual2: Individual) {
@@ -194,15 +219,15 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         individual1.strategy.remember(individual2.id, decision2)
         individual2.strategy.remember(individual1.id, decision1)
 
-        individual1.strength += payoff1
-        individual2.strength += payoff2
+        individual1.energy += payoff1
+        individual2.energy += payoff2
 
         dieIfWeak(individual1)
         dieIfWeak(individual2)
     }
 
     private fun dieIfWeak(individual: Individual) {
-        if (individual.strength < MIN_STRENGTH_TO_LIVE) {
+        if (individual.energy < MIN_ENERGY_TO_LIVE) {
             val removed = individuals.remove(individual)
             assert(removed)
             deaths++
@@ -220,8 +245,8 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     private fun breed(individual: Individual) {
         val strategyClone = individual.strategy.clone()
         assert(strategyClone.javaClass == individual.strategy.javaClass)
-        individuals.add(Individual(newId(), strategyClone, INITIAL_STRENGTH, individual.location))
-        individual.strength -= BREEDING_COST
+        individuals.add(Individual(newId(), strategyClone, INITIAL_ENERGY, individual.location))
+        individual.energy -= BREEDING_COST
         births++
     }
 }
