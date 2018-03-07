@@ -76,7 +76,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     private val random = Random()
 
     // statistics
-    var rounds = 0
+    var cycles = 0
         private set
     var games = 0
         private set
@@ -84,7 +84,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         private set
     var births = 0
         private set
-    var oneRoundTime = 0
+    var oneCycleTime = 0
         private set
 
     init {
@@ -130,8 +130,8 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         val grouped = individuals.groupBy { it.strategy.presentation }
         val presentationsSorted = grouped.keys.sortedByDescending { grouped[it]!!.size }
         return buildString {
-            append("Rounds: $rounds\n")
-            append("Last round time: $oneRoundTime ms\n")
+            append("Cycles: $cycles\n")
+            append("Last cycle time: $oneCycleTime ms\n")
             append("Games played: $games\n")
             append("Died: $deaths\n")
             append("Born: $births\n")
@@ -192,7 +192,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         return image
     }
 
-    fun runOneRound() {
+    fun runOneCycle() {
         val startTime = System.currentTimeMillis()
 
         for (individual in individuals.toList()) {
@@ -221,8 +221,8 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
 
         }
 
-        rounds++
-        oneRoundTime = (System.currentTimeMillis() - startTime).toInt()
+        cycles++
+        oneCycleTime = (System.currentTimeMillis() - startTime).toInt()
     }
 
     private fun playGame(individual1: Individual, individual2: Individual) {
