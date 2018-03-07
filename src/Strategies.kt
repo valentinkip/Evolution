@@ -26,7 +26,7 @@ class RandomStrategy(private val defectRate: Double) : Strategy() {
     override val presentationColor = (defectRate * 255).toInt().let { Color(it, it, it) }
 
     override fun makeDecision(otherId: Long): Decision {
-        return if (random.nextBoolean()) Decision.COOPERATE else Decision.DEFECT
+        return if (random.nextDouble() > defectRate) Decision.COOPERATE else Decision.DEFECT
     }
 
     override fun clone() = RandomStrategy(defectRate)
