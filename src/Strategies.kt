@@ -4,14 +4,14 @@ import java.util.*
 object NaiveStrategy : Strategy() {
     override val presentation get() = "Naive"
     override val presentationColor get() = Color.PINK
-    override fun makeDecision(otherId: Long) = Decision.COOPERATE
+    override fun makeDecision(otherId: Long, gameHistory: GamesHistory) = Decision.COOPERATE
     override fun clone() = this
 }
 
 object CynicStrategy : Strategy() {
     override val presentation get() = "Cynic"
     override val presentationColor get() = Color.BLACK
-    override fun makeDecision(otherId: Long) = Decision.DEFECT
+    override fun makeDecision(otherId: Long, gameHistory: GamesHistory) = Decision.DEFECT
     override fun clone() = this
 }
 
@@ -25,7 +25,7 @@ class RandomStrategy(private val defectRate: Double) : Strategy() {
     override val presentation get() = "Random (defectRate = $defectRate)"
     override val presentationColor = (defectRate * 255).toInt().let { Color(it, it, it) }
 
-    override fun makeDecision(otherId: Long): Decision {
+    override fun makeDecision(otherId: Long, gameHistory: GamesHistory): Decision {
         return if (random.nextDouble() > defectRate) Decision.COOPERATE else Decision.DEFECT
     }
 
@@ -33,15 +33,12 @@ class RandomStrategy(private val defectRate: Double) : Strategy() {
 }
 
 open class TitForTatStrategy : Strategy() {
-    private val reminscences = mutableMapOf<Long, Decision>()
-
     override val presentation get() = "Tit for Tat"
     override val presentationColor get() = Color.GREEN
 
-    override fun makeDecision(otherId: Long) = reminscences[otherId] ?: Decision.COOPERATE
-
-    override fun remember(otherId: Long, otherDecision: Decision) {
-        reminscences[otherId] = otherDecision
+    override fun makeDecision(otherId: Long, gameHistory: GamesHistory): Decision {
+        val prevGames = gameHistory.gamesWithPartner(otherId)
+        return prevGames.lastOrNull()?.hisDecision ?: Decision.COOPERATE
     }
 
     override fun clone() = TitForTatStrategy()
@@ -57,8 +54,8 @@ class NaiveProberStrategy(private val probeRate: Double) : TitForTatStrategy() {
     override val presentation get() = "Naive Prober (probeRate = $probeRate)"
     override val presentationColor: Color get() = Color.RED
 
-    override fun makeDecision(otherId: Long): Decision {
-        return if (random.nextDouble() > probeRate) super.makeDecision(otherId) else Decision.DEFECT
+    override fun makeDecision(otherId: Long, gameHistory: GamesHistory): Decision {
+        return if (random.nextDouble() > probeRate) super.makeDecision(otherId, gameHistory) else Decision.DEFECT
     }
 
     override fun clone() = NaiveProberStrategy(probeRate)

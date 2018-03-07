@@ -49,10 +49,7 @@ abstract class Strategy {
     abstract val presentation: String
     abstract val presentationColor: Color
 
-    abstract fun makeDecision(otherId: Long): Decision
-
-    open fun remember(otherId: Long, otherDecision: Decision) {
-    }
+    abstract fun makeDecision(otherId: Long, gameHistory: GamesHistory): Decision
 
     abstract fun clone(): Strategy
 
@@ -67,17 +64,25 @@ data class Location(val x: Double, val y: Double) {
     }
 }
 
-class Individual(val id: Long, val strategy: Strategy, var energy: Double, var location: Location)
+class Individual(
+        val id: Long,
+        val strategy: Strategy,
+        var energy: Double,
+        var location: Location,
+        val gamesHistory: GamesHistory = GamesHistory(id)
+)
 
 class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     private val individuals: MutableCollection<Individual>
     private val grid = Grid<Individual>(MAX_DISTANCE_TO_MEET * 2, { location })
+
     private var nextId = 0L
     private val random = Random()
 
-    // statistics
-    var cycles = 0
+    var cycleNumber = 0
         private set
+
+    // statistics
     var games = 0
         private set
     var deaths = 0
@@ -130,7 +135,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
         val grouped = individuals.groupBy { it.strategy.presentation }
         val presentationsSorted = grouped.keys.sortedByDescending { grouped[it]!!.size }
         return buildString {
-            append("Cycles: $cycles\n")
+            append("Cycles: $cycleNumber\n")
             append("Last cycle time: $oneCycleTime ms\n")
             append("Games played: $games\n")
             append("Died: $deaths\n")
@@ -221,19 +226,19 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
 
         }
 
-        cycles++
+        cycleNumber++
         oneCycleTime = (System.currentTimeMillis() - startTime).toInt()
     }
 
     private fun playGame(individual1: Individual, individual2: Individual) {
-        val decision1 = individual1.strategy.makeDecision(individual2.id)
-        val decision2 = individual2.strategy.makeDecision(individual1.id)
+        val decision1 = individual1.strategy.makeDecision(individual2.id, individual1.gamesHistory)
+        val decision2 = individual2.strategy.makeDecision(individual1.id, individual2.gamesHistory)
 
         val payoff1 = payoff(decision1, decision2)
         val payoff2 = payoff(decision2, decision1)
 
-        individual1.strategy.remember(individual2.id, decision2)
-        individual2.strategy.remember(individual1.id, decision1)
+        individual1.gamesHistory.addGame(individual2.id, cycleNumber, decision1, decision2)
+        individual2.gamesHistory.addGame(individual1.id, cycleNumber, decision2, decision1)
 
         individual1.energy += payoff1
         individual2.energy += payoff2
