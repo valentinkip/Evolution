@@ -1,4 +1,5 @@
 import java.awt.Color
+import java.util.*
 
 const val COOPERATION_PAYOFF = +1.0
 const val SUCKER_FINE = -1.5
@@ -27,13 +28,15 @@ fun payoff(my: Decision, other: Decision): Double {
     }
 }
 
+interface GameEnvironment {
+    val random: Random
+}
+
 abstract class Strategy {
     abstract val presentation: String
     abstract val presentationColor: Color
 
-    abstract fun makeDecision(otherId: Long, gameHistory: GamesHistory): Decision
-
-    abstract fun clone(): Strategy
+    abstract fun makeDecision(otherId: Long, gamesHistory: GamesHistory, env: GameEnvironment): Decision
 
     override fun toString() = presentation
 }

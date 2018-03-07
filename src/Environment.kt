@@ -41,6 +41,11 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     private var nextId = 0L
     private val random = Random()
 
+    private val gameEnvironment = object : GameEnvironment {
+        override val random: Random
+            get() = this@Environment.random
+    }
+
     var cycleNumber = 0
         private set
 
@@ -57,16 +62,9 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     init {
         individuals = mutableSetOf()
         for ((strategy, count) in initialPopulation) {
-            assert(count > 0)
-            var clones = count - 1
-            var strategyToUse = strategy
-
-            while (true) {
+            for (i in 0 until count) {
                 val location = Location(random.nextDouble() * INITIAL_AREA_SIZE, random.nextDouble() * INITIAL_AREA_SIZE)
-                addIndividual(Individual(newId(), strategyToUse, INITIAL_ENERGY, location))
-
-                if (clones-- == 0) break
-                strategyToUse = strategy.clone()
+                addIndividual(Individual(newId(), strategy, INITIAL_ENERGY, location))
             }
         }
     }
@@ -193,8 +191,8 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     }
 
     private fun playGame(individual1: Individual, individual2: Individual) {
-        val decision1 = individual1.strategy.makeDecision(individual2.id, individual1.gamesHistory)
-        val decision2 = individual2.strategy.makeDecision(individual1.id, individual2.gamesHistory)
+        val decision1 = individual1.strategy.makeDecision(individual2.id, individual1.gamesHistory, gameEnvironment)
+        val decision2 = individual2.strategy.makeDecision(individual1.id, individual2.gamesHistory, gameEnvironment)
 
         val payoff1 = payoff(decision1, decision2)
         val payoff2 = payoff(decision2, decision1)
@@ -225,9 +223,7 @@ class Environment(initialPopulation: Collection<Pair<Strategy, Int>>) {
     }
 
     private fun breed(individual: Individual) {
-        val strategyClone = individual.strategy.clone()
-        assert(strategyClone.javaClass == individual.strategy.javaClass)
-        addIndividual(Individual(newId(), strategyClone, INITIAL_ENERGY, individual.location))
+        addIndividual(Individual(newId(), individual.strategy, INITIAL_ENERGY, individual.location))
         individual.energy -= BREEDING_COST
         births++
     }

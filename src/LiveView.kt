@@ -59,7 +59,7 @@ class LiveView : JPanel(BorderLayout()) {
                         RandomStrategy(0.5) to 1,
                         RandomStrategy(0.25) to 1,
                         RandomStrategy(0.75) to 1,
-                        TitForTatStrategy() to 5,
+                        TitForTatStrategy to 5,
                         NaiveProberStrategy(0.1) to 1,
                         NaiveProberStrategy(0.2) to 1,
                         NaiveProberStrategy(0.3) to 1
